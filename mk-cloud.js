@@ -79,6 +79,8 @@
     if (e && e.user) return e.message;
     if (e && e.network) return 'تعذر الاتصال بالإنترنت.';
     const m = String((e && e.message) || e);
+    if (/signups? (are|is) disabled|signup_disabled/i.test(m + ' ' + JSON.stringify((e && e.data) || ''))) return 'التسجيل معطّل في Supabase. فعّل «Allow new users to sign up» وفعّل مزوّد Email من Authentication ← Sign In / Providers.';
+    if (/email not confirmed|email_not_confirmed/i.test(m + ' ' + JSON.stringify((e && e.data) || ''))) return 'هذا الحساب غير مؤكد في Supabase. نفّذ في SQL Editor: update auth.users set email_confirmed_at = now() where email_confirmed_at is null;';
     if (/invalid path specified/i.test(m)) return 'رابط Supabase في mk-config.js غير صحيح. يجب أن يكون هكذا فقط: https://xxxx.supabase.co';
     if (/invalid api key|no api key/i.test(m)) return 'المفتاح في mk-config.js غير صحيح. استخدم المفتاح العام (anon / publishable).';
     if (/PGRST205|schema cache|could not find the (table|function)|does not exist/i.test(m + ' ' + JSON.stringify((e && e.data) || ''))) return 'قاعدة البيانات لم تُجهَّز بعد. نفّذ ملف supabase-schema.sql في Supabase أولًا.';
@@ -351,7 +353,10 @@
     try { r = await api('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: username + DOMAIN, password } }); }
     catch (e) {
       if (e.network) return offlineLogin(username, password);
-      if (e.status === 400 || e.status === 401 || e.status === 422) throw uerr('بيانات الدخول غير صحيحة.');
+      if (e.status === 400 || e.status === 401 || e.status === 422) {
+        if (/not confirmed|email_not_confirmed/i.test(e.message + ' ' + JSON.stringify(e.data || ''))) throw e;
+        throw uerr('بيانات الدخول غير صحيحة. تأكد من اسم الدخول وكلمة المرور، وأن المستخدم موجود في Supabase ببريد ' + username + DOMAIN);
+      }
       throw e;
     }
     await finishLogin(r, username, password);
@@ -375,7 +380,7 @@
     try { r = await api('/auth/v1/signup', { method: 'POST', body: { email, password: pw } }); }
     catch (e) {
       if (e.network) throw e;
-      if (e.status === 422 || /registered|already/i.test(e.message)) {
+      if (/registered|already|exists/i.test(e.message + ' ' + JSON.stringify(e.data || ''))) {
         try { r = await api('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password: pw } }); }
         catch { throw uerr('اسم الدخول مستخدم بالفعل، اختر اسمًا آخر.'); }
       } else throw e;
@@ -478,7 +483,7 @@
       if (!id) {
         let r;
         try { r = await api('/auth/v1/signup', { method: 'POST', body: { email: username + DOMAIN, password } }); }
-        catch (e) { if (!e.network && (e.status === 422 || /registered|already/i.test(e.message))) return alert('اسم الدخول مستخدم بالفعل، اختر اسمًا آخر.'); throw e; }
+        catch (e) { if (!e.network && /registered|already|exists/i.test(e.message + ' ' + JSON.stringify(e.data || ''))) return alert('اسم الدخول مستخدم بالفعل، اختر اسمًا آخر.'); throw e; }
         if (!r || !r.access_token) return alert('إعداد Supabase: عطّل خيار «Confirm email» ثم أعد المحاولة.');
         newId = r.user.id;
         await rpc('add_member', { p_user_id: newId, p_username: username, p_full_name: name, p_role: role, p_permissions: perms, p_client_id: clientId || null, p_extra: extra });

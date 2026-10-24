@@ -1,9 +1,11 @@
 /* مكتبي الإلكتروني — Service Worker (يعمل أونلاين وأوفلاين) */
-const VERSION = "maktabi-v1.0.0";
+const VERSION = "maktabi-v1.1.0";
 const CORE = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./mk-config.js",
+  "./mk-cloud.js",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable-512.png",

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>فحص اتصال مكتبي بـ Supabase</title>
+<style>
+body{font-family:system-ui,Tahoma,sans-serif;margin:0;padding:16px;background:#f4f6f8;color:#14212b;line-height:1.7}
+h1{font-size:19px;margin:0 0 12px}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.ok{color:#0a7d33}.bad{color:#b3261e}.warn{color:#9a6700}
+button{font:inherit;padding:10px 14px;border:0;border-radius:8px;background:#0b1f33;color:#fff;margin:4px 0}
+button.sec{background:#6b7782}
+input{font:inherit;width:100%;box-sizing:border-box;padding:10px;margin:4px 0;border:1px solid #c5ccd3;border-radius:8px;direction:ltr}
+pre{white-space:pre-wrap;word-break:break-all;background:#eef1f4;padding:8px;border-radius:8px;direction:ltr;text-align:left;font-size:12px}
+</style>
+</head>
+<body>
+<h1>🔎 فحص اتصال مكتبي بـ Supabase</h1>
+
+<div class="card"><b>1) الفحص التلقائي</b><div id="auto">جارٍ الفحص…</div></div>
+
+<div class="card"><b>2) تجربة تسجيل الدخول</b>
+<input id="u" placeholder="اسم الدخول مثل ali7assansa3id" autocapitalize="none" autocomplete="off">
+<input id="p" type="password" placeholder="كلمة المرور" autocomplete="off">
+<button onclick="tryLogin()">جرّب الدخول</button>
+<div id="loginOut"></div></div>
+
+<div class="card"><b>3) إصلاح النسخة القديمة المخزّنة</b>
+<div>إن كان الموقع يعرض أخطاء قديمة رغم رفع الملفات الجديدة، اضغط هنا ثم افتح الموقع من جديد.</div>
+<button class="sec" onclick="clearAll()">مسح التخزين المؤقت للتطبيق</button>
+<div id="clearOut"></div></div>
+
+<script src="mk-config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const line=(cls,t)=>{const d=document.createElement('div');d.className=cls;d.textContent=t;return d};
+const cfg=window.MK_CONFIG||{};
+let BASE='';
+try{let u=String(cfg.url||'').trim();if(!/^https?:\/\//i.test(u))u='https://'+u;BASE=new URL(u).origin;}catch(e){}
+const key=String(cfg.anonKey||'').trim();
+const H=t=>{const h={apikey:key};if(t)h.Authorization='Bearer '+t;else if(key.startsWith('eyJ'))h.Authorization='Bearer '+key;return h};
+async function j(url,opt){try{const r=await fetch(BASE+url,opt);const t=await r.text();let d=t;try{d=JSON.parse(t)}catch{}return{st:r.status,d}}catch(e){return{st:0,d:String(e)}}}
+
+(async function(){
+  const out=$('auto');out.textContent='';
+  if(!cfg.url||!key){out.append(line('bad','❌ ملف mk-config.js فارغ: ضع الرابط والمفتاح العام فيه ثم ارفعه.'));return}
+  out.append(line('ok','✅ الرابط: '+BASE));
+  out.append(line(key.startsWith('eyJ')||key.startsWith('sb_')?'ok':'warn','المفتاح: '+(key.startsWith('eyJ')||key.startsWith('sb_publishable')?'يبدو صحيحًا':'شكله غير مألوف، تأكد أنه المفتاح العام anon/publishable')));
+  if(key.includes('service_role'))out.append(line('bad','❌ هذا مفتاح service_role! لا تنشره أبدًا، استبدله بالمفتاح العام.'));
+
+  const s=await j('/auth/v1/settings',{headers:H()});
+  if(s.st!==200){out.append(line('bad','❌ تعذر الوصول إلى Supabase (HTTP '+s.st+'): '+JSON.stringify(s.d).slice(0,200)+' — تحقق من الرابط والمفتاح.'))}
+  else{
+    const emailOn=s.d.external&&s.d.external.email, dis=s.d.disable_signup, auto=s.d.mailer_autoconfirm;
+    out.append(line(emailOn?'ok':'bad',(emailOn?'✅':'❌')+' مزوّد Email '+(emailOn?'مفعّل':'معطّل → فعّله')));
+    out.append(line(!dis?'ok':'bad',(!dis?'✅':'❌')+' التسجيل الجديد '+(!dis?'مسموح':'معطّل → فعّل Allow new users to sign up')));
+    out.append(line(auto?'ok':'bad',(auto?'✅':'❌')+' Confirm email '+(auto?'معطّل (صحيح)':'مفعّل → عطّله')));
+  }
+  const t=await j('/rest/v1/offices?select=id&limit=1',{headers:H()});
+  const miss=t.st===404||/PGRST205|schema cache/i.test(JSON.stringify(t.d));
+  out.append(line(miss?'bad':'ok',miss?'❌ الجداول غير موجودة: نفّذ supabase-schema.sql':'✅ الجداول موجودة'));
+
+  try{const r=await fetch('mk-cloud.js',{cache:'no-store'});const tx=await r.text();
+    out.append(line(/signup_disabled/.test(tx)?'ok':'bad',/signup_disabled/.test(tx)?'✅ نسخة mk-cloud.js على GitHub حديثة':'❌ mk-cloud.js على GitHub قديم: ارفع النسخة الجديدة'))}catch{}
+  try{const r=await fetch('sw.js',{cache:'no-store'});const tx=await r.text();const m=/VERSION\s*=\s*"([^"]+)"/.exec(tx);
+    out.append(line(m&&m[1]>='maktabi-v1.1.3'?'ok':'warn','نسخة sw.js على GitHub: '+(m?m[1]:'?')+' (المطلوب v1.1.3)'))}catch{}
+})();
+
+async function tryLogin(){
+  const out=$('loginOut');out.textContent='';
+  const u=$('u').value.trim().toLowerCase(),p=$('p').value;
+  if(!u||!p){out.append(line('warn','أدخل الاسم وكلمة المرور'));return}
+  const r=await j('/auth/v1/token?grant_type=password',{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify({email:u+'@maktaby.app',password:p})});
+  if(r.st===200){
+    out.append(line('ok','✅ كلمة المرور صحيحة والحساب مفعّل'));
+    const pr=await j('/rest/v1/profiles?user_id=eq.'+r.d.user.id+'&select=role,username,active',{headers:H(r.d.access_token)});
+    if(Array.isArray(pr.d)&&pr.d[0])out.append(line('ok','✅ الملف الشخصي موجود، الدور: '+pr.d[0].role+' ، نشط: '+pr.d[0].active));
+    else out.append(line('bad','❌ لا يوجد ملف شخصي لهذا الحساب: نفّذ supabase-owner.sql (إن كان حساب المالك) — '+JSON.stringify(pr.d).slice(0,150)));
+  }else{
+    const raw=JSON.stringify(r.d);
+    if(/not confirmed/i.test(raw))out.append(line('bad','❌ الحساب غير مؤكد: نفّذ supabase-check.sql'));
+    else if(/invalid login/i.test(raw))out.append(line('bad','❌ البريد '+u+'@maktaby.app أو كلمة المرور غير صحيحين. تحقق من البريد المكتوب عند إنشاء المستخدم في Authentication ← Users.'));
+    else out.append(line('bad','❌ HTTP '+r.st));
+    const pre=document.createElement('pre');pre.textContent=raw.slice(0,300);out.append(pre);
+  }
+}
+async function clearAll(){
+  const o=$('clearOut');o.textContent='';
+  try{const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();
+    const ks=await caches.keys();for(const k of ks)await caches.delete(k);
+    o.append(line('ok','✅ تم المسح. افتح الموقع الآن (أغلقه تمامًا ثم افتحه).'))}
+  catch(e){o.append(line('bad','تعذر المسح: '+e))}
+}
+</script>
+</body>
+</html>

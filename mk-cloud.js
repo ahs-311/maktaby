@@ -4,9 +4,15 @@
 (function () {
   'use strict';
   const CFG = window.MK_CONFIG || {};
+  CFG.url = String(CFG.url || '').trim(); CFG.anonKey = String(CFG.anonKey || '').trim();
   const ENABLED = !!(CFG.url && CFG.anonKey);
   if (!ENABLED) { console.info('[mk] Supabase غير مضبوط — الوضع المحلي'); return; }
 
+  // نأخذ أصل الرابط فقط (https://xxxx.supabase.co) حتى لو لُصق معه مسار زائد مثل /rest/v1
+  const BASE = (function () {
+    try { let u = String(CFG.url).trim(); if (!/^https?:\/\//i.test(u)) u = 'https://' + u; return new URL(u).origin; }
+    catch (e) { return String(CFG.url).trim().replace(/\/+$/, ''); }
+  })();
   const DOMAIN = '@maktaby.app';
   const COLLS = ['attachments','bailiffs','cases','clients','docs','events','fin_entries','invoices',
     'ld_cases','ld_checklist','notes','poas','sessions','tasks','workdays'];
@@ -37,7 +43,7 @@
     if (prefer) headers.Prefer = prefer;
     let res;
     try {
-      res = await fetch(CFG.url.replace(/\/+$/, '') + path,
+      res = await fetch(BASE + path,
         { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
     } catch (e) { throw netErr(); }
     const text = await res.text(); let data = null;
@@ -73,6 +79,9 @@
     if (e && e.user) return e.message;
     if (e && e.network) return 'تعذر الاتصال بالإنترنت.';
     const m = String((e && e.message) || e);
+    if (/invalid path specified/i.test(m)) return 'رابط Supabase في mk-config.js غير صحيح. يجب أن يكون هكذا فقط: https://xxxx.supabase.co';
+    if (/invalid api key|no api key/i.test(m)) return 'المفتاح في mk-config.js غير صحيح. استخدم المفتاح العام (anon / publishable).';
+    if (/PGRST205|schema cache|could not find the (table|function)|does not exist/i.test(m + ' ' + JSON.stringify((e && e.data) || ''))) return 'قاعدة البيانات لم تُجهَّز بعد. نفّذ ملف supabase-schema.sql في Supabase أولًا.';
     const map = { forbidden: 'غير مسموح لك بهذه العملية.', not_found: 'الحساب غير موجود.', office_inactive: 'المكتب موقوف.',
       bad_role: 'دور غير صالح.', client_required: 'اربط حساب الموكل بسجل العميل.', bad_username: 'اسم الدخول غير صالح.',
       invalid_target: 'تعذر ربط الحساب الجديد. أعد المحاولة.', profile_exists: 'الحساب موجود بالفعل.',

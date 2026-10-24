@@ -1,0 +1,8 @@
+# نسخ احتياطية وبيانات حقيقية — لا تُرفع أبدًا
+*.backup.json
+*-backup*.json
+backup/
+data/
+*.bak
+.DS_Store
+Thumbs.db

@@ -1,5 +1,5 @@
 /* مكتبي الإلكتروني — Service Worker (يعمل أونلاين وأوفلاين) */
-const VERSION = "maktabi-v1.1.0";
+const VERSION = "maktabi-v1.1.1";
 const CORE = [
   "./",
   "./index.html",
